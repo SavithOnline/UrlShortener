@@ -1,22 +1,25 @@
-import sqlite3
+import os
 import string
 import random
+import psycopg2
+import psycopg2.extras
 from flask import Flask, request, redirect, render_template_string
 
 app = Flask(__name__)
-DB = "urls.db"
 
 def get_db():
-    conn = sqlite3.connect(DB)
-    conn.execute("""
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    conn.autocommit = True
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS urls (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id    SERIAL PRIMARY KEY,
             short TEXT UNIQUE NOT NULL,
             long  TEXT NOT NULL,
             hits  INTEGER DEFAULT 0
         )
     """)
-    return conn
+    return conn, cur
 
 def make_code():
     chars = string.ascii_letters + string.digits
@@ -49,9 +52,9 @@ HTML = """
 <h3>All links</h3>
 {% for row in rows %}
   <p>
-    <a href="/{{ row[1] }}">/{{ row[1] }}</a> →
-    <span style="color:#555">{{ row[2][:50] }}...</span>
-    <span class="hits">({{ row[3] }} clicks)</span>
+    <a href="/{{ row['short'] }}">/{{ row['short'] }}</a> →
+    <span style="color:#555">{{ row['long'][:50] }}...</span>
+    <span class="hits">({{ row['hits'] }} clicks)</span>
   </p>
 {% endfor %}
 """
@@ -60,7 +63,7 @@ HTML = """
 def index():
     short_url = None
     error = None
-    db = get_db()
+    conn, cur = get_db()
 
     if request.method == "POST":
         long_url = request.form["url"].strip()
@@ -68,28 +71,28 @@ def index():
             long_url = "https://" + long_url
         code = make_code()
         try:
-            db.execute("INSERT INTO urls (short, long) VALUES (?, ?)", (code, long_url))
-            db.commit()
+            cur.execute("INSERT INTO urls (short, long) VALUES (%s, %s)", (code, long_url))
             short_url = request.host_url + code
         except Exception as e:
             error = f"Something went wrong: {e}"
 
-    rows = db.execute("SELECT * FROM urls ORDER BY id DESC").fetchall()
-    db.close()
+    cur.execute("SELECT * FROM urls ORDER BY id DESC")
+    rows = cur.fetchall()
+    conn.close()
     return render_template_string(HTML, short_url=short_url, rows=rows, error=error)
 
 @app.route("/<code>")
 def redirect_url(code):
-    db = get_db()
-    row = db.execute("SELECT long FROM urls WHERE short = ?", (code,)).fetchone()
+    conn, cur = get_db()
+    cur.execute("SELECT long FROM urls WHERE short = %s", (code,))
+    row = cur.fetchone()
     if row:
-        db.execute("UPDATE urls SET hits = hits + 1 WHERE short = ?", (code,))
-        db.commit()
-        db.close()
-        return redirect(row[0])
-    db.close()
+        cur.execute("UPDATE urls SET hits = hits + 1 WHERE short = %s", (code,))
+        conn.close()
+        return redirect(row["long"])
+    conn.close()
     return "Link not found", 404
 
-import os
-port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port, debug=False)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)

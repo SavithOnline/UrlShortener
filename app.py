@@ -39,7 +39,7 @@ HTML = """
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>shrtn.ly</title>
+<title>URL Shortener</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -175,8 +175,6 @@ HTML = """
 <div class="bg-dot"></div>
 <div class="accent"></div>
 <div class="wrap">
-
-  <div class="logo">⚡ shrtn.ly</div>
 
   <div class="hero">
     <h1>Shorten.<br><span>Share.</span></h1>

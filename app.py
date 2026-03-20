@@ -1,19 +1,21 @@
-from dotenv import load_dotenv
-load_dotenv()
-
-import os
-import string
-import random
 import logging
+import os
+import random
+import string
+
 import psycopg2
 import psycopg2.extras
-from flask import Flask, request, redirect, render_template_string
+from dotenv import load_dotenv
+from flask import Flask, redirect, render_template_string, request
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-only-secret")
+
 
 def get_db():
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
@@ -29,9 +31,11 @@ def get_db():
     """)
     return conn, cur
 
+
 def make_code():
     chars = string.ascii_letters + string.digits
     return "".join(random.choices(chars, k=6))
+
 
 HTML = """
 <!doctype html>
@@ -237,6 +241,7 @@ HTML = """
 </html>
 """
 
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     short_url = None
@@ -249,7 +254,9 @@ def index():
             long_url = "https://" + long_url
         code = make_code()
         try:
-            cur.execute("INSERT INTO urls (short, long) VALUES (%s, %s)", (code, long_url))
+            cur.execute(
+                "INSERT INTO urls (short, long) VALUES (%s, %s)", (code, long_url)
+            )
             short_url = request.host_url + code
         except Exception as e:
             error = f"Something went wrong: {e}"
@@ -258,8 +265,10 @@ def index():
     rows = cur.fetchall()
     total_hits = sum(row["hits"] for row in rows)
     conn.close()
-    return render_template_string(HTML, short_url=short_url, rows=rows,
-                                  error=error, total_hits=total_hits)
+    return render_template_string(
+        HTML, short_url=short_url, rows=rows, error=error, total_hits=total_hits
+    )
+
 
 @app.route("/<code>")
 def redirect_url(code):
@@ -274,6 +283,7 @@ def redirect_url(code):
     conn.close()
     logger.warning(f"Not found: /{code}")
     return "Link not found", 404
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
